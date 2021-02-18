@@ -105,10 +105,40 @@ fn links_deeply_nested_file() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// todo: recursive folder creation
+#[test]
+fn unlinks_module() -> Result<(), Box<dyn std::error::Error>> {
+    let (tmp_dir, (from_path, _from_path_string), (to_path, _to_path_string)) = setup_config()?;
 
-// #[test]
-// fn unlinks_module() -> Result<(), Box<dyn std::error::Error>> {}
+    // Creates a link: `to/linked.zsh` -> `from/linked.zsh`
+    let location = from_path.join("linked.zsh");
+    let linked_location = to_path.join("linked.zsh");
+    File::create(&location)?;
+    std::os::unix::fs::symlink(&location, &linked_location)?;
 
-// #[test]
-// fn syncs_module() -> Result<(), Box<dyn std::error::Error>> {}
+    let mut cmd = Command::cargo_bin("kdot")?;
+    cmd.current_dir(tmp_dir.path().as_os_str().to_str().unwrap())
+        .arg("unlink")
+        .arg("bash");
+
+    cmd.assert().success();
+
+    let does_not_exist = predicate::path::exists().not();
+
+    assert_eq!(true, does_not_exist.eval(&linked_location));
+
+    Ok(())
+}
+
+fn unlinks_deeply_nested_module() -> Result<(), Box<dyn std::error::Error>> {
+    Ok(())
+}
+
+#[test]
+fn unlink_fails_if_file_does_not_exist() -> Result<(), Box<dyn std::error::Error>> {
+    Ok(())
+}
+
+#[test]
+fn syncs_module() -> Result<(), Box<dyn std::error::Error>> {
+    Ok(())
+}
