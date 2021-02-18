@@ -1,6 +1,10 @@
 use anyhow::{bail, Context, Result};
 use pathdiff::diff_paths;
-use std::{collections::HashSet, fs, os::unix::fs as unixfs};
+use std::{
+    collections::HashSet,
+    fs::{self, DirEntry},
+    os::unix::fs as unixfs,
+};
 use std::{fs::canonicalize, path::PathBuf};
 use walkdir::WalkDir;
 
@@ -79,14 +83,14 @@ pub fn link_folder(from: &PathBuf, to: &PathBuf, recursive: bool) -> Result<()> 
                         );
                         // link_file(&relative_from, file)?;
                         // TODO: remove below infavor of generic impl
-                        unixfs::symlink(&full_file_path, &relative_from)
-                            .with_context(|| format!("Failed to link file."))?; // .with_context(|| {
-                                                                                //     format!(
-                                                                                //         "Failed to symlink \"{}\" -> \"{}\"",
-                                                                                //         relative_from.as_os_str().to_str().unwrap(),
-                                                                                //         file.as_os_str().to_str().unwrap()
-                                                                                //     )
-                                                                                // })?;
+                        unixfs::symlink(&full_file_path, &relative_from).with_context(|| {
+                            format!(
+                                "Failed to symlink \"{}\" -> \"{}\"",
+                                relative_from.as_os_str().to_str().unwrap(),
+                                file.as_os_str().to_str().unwrap()
+                            )
+                        })?;
+                        // .with_context(|| format!("Failed to link file."))?;
                     }
                     None => bail!("Invalid path difference."),
                 }
@@ -114,12 +118,14 @@ fn get_relative_files(folder: &PathBuf) -> Result<HashSet<PathBuf>> {
     let walker = WalkDir::new(&folder).into_iter();
 
     for entry in walker {
-        let entry = entry.unwrap();
-        let file = entry.path();
+        // Ignore invalid permissioned files
+        if let Ok(entry) = entry {
+            let file = entry.path();
 
-        if file.is_file() {
-            let relative_to_folder = diff_paths(file.to_owned(), &folder).unwrap();
-            relative_files.insert(relative_to_folder);
+            if file.is_file() {
+                let relative_to_folder = diff_paths(file.to_owned(), &folder).unwrap();
+                relative_files.insert(relative_to_folder);
+            }
         }
     }
 
@@ -133,26 +139,30 @@ pub fn unlink_folder(from: &PathBuf, to: &PathBuf, recursive: bool) -> Result<()
     } else if recursive {
         debug!("Unlinking recursivly.");
 
-        let relative_files_from = get_relative_files(&from)?;
         let relative_files_to = get_relative_files(&to)?;
 
-        debug!(
-            "Unlinking from: {:?} to: {:?}",
-            relative_files_from, relative_files_to
-        );
+        debug!("Unlinking: {:?}", relative_files_to);
 
-        let intersection: Vec<_> = relative_files_from
-            .intersection(&relative_files_to)
-            .collect();
-
-        debug!("Files to unlink: {:?}", intersection);
-
-        if intersection.len() == 0 {
+        if relative_files_to.len() == 0 {
             warn!("There are no files to unlink!");
             return Ok(());
         }
 
-        for file in intersection.into_iter().map(|file| from.join(&file)) {
+        for file in relative_files_to
+            .into_iter()
+            // Filter out files that don't exist in `from`
+            .filter(|file| {
+                let from_file = {
+                    let mut f = from.clone();
+                    f.push(file);
+                    f
+                };
+
+                return from_file.exists();
+            })
+            // Make path absolute
+            .map(|file| from.join(&file))
+        {
             info!("Unlinking \"{}\"", file.as_os_str().to_str().unwrap());
             unlink_file(&file)?;
         }
