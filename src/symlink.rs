@@ -1,9 +1,8 @@
-use anyhow::{anyhow, bail, Context, Result};
-use fs::read_link;
+use anyhow::{bail, Context, Result};
 use pathdiff::diff_paths;
-use std::{fs, io, os::unix::fs as unixfs};
+use std::{collections::HashSet, fs, os::unix::fs as unixfs};
 use std::{fs::canonicalize, path::PathBuf};
-use walkdir::{DirEntry, WalkDir};
+use walkdir::WalkDir;
 
 /// Creates a file symlink.
 // pub fn link_file(from: &PathBuf, to: &PathBuf) -> Result<()> {
@@ -32,10 +31,6 @@ pub fn unlink_file(path: &PathBuf) -> Result<()> {
 
 /// Creates a folder symlink.
 pub fn link_folder(from: &PathBuf, to: &PathBuf, recursive: bool) -> Result<()> {
-    if from.exists() {
-        bail!("\"from\" path already exists.");
-    }
-
     if recursive {
         // Walk the files and symlink if file or create directory
         let walker = WalkDir::new(&to).into_iter();
@@ -99,6 +94,11 @@ pub fn link_folder(from: &PathBuf, to: &PathBuf, recursive: bool) -> Result<()> 
         }
     } else {
         debug!("Symlinking folder directly.");
+
+        if from.exists() {
+            bail!("\"from\" path already exists.");
+        }
+
         unixfs::symlink(&to, &from).with_context(|| format!("Failed to symlink."))?;
     }
 
@@ -107,15 +107,67 @@ pub fn link_folder(from: &PathBuf, to: &PathBuf, recursive: bool) -> Result<()> 
     Ok(())
 }
 
+/// Gets all files relative from `folder`
+fn get_relative_files(folder: &PathBuf) -> Result<HashSet<PathBuf>> {
+    let mut relative_files = HashSet::new();
+
+    let walker = WalkDir::new(&folder).into_iter();
+
+    for entry in walker {
+        let entry = entry.unwrap();
+        let file = entry.path();
+
+        if file.is_file() {
+            let relative_to_folder = diff_paths(file.to_owned(), &folder).unwrap();
+            relative_files.insert(relative_to_folder);
+        }
+    }
+
+    Ok(relative_files)
+}
+
 /// Remove a folder symlink.
 pub fn unlink_folder(from: &PathBuf, to: &PathBuf, recursive: bool) -> Result<()> {
     if !from.exists() {
         warn!("info: from does not exist!");
+    } else if recursive {
+        debug!("Unlinking recursivly.");
+
+        let relative_files_from = get_relative_files(&from)?;
+        let relative_files_to = get_relative_files(&to)?;
+
+        debug!(
+            "Unlinking from: {:?} to: {:?}",
+            relative_files_from, relative_files_to
+        );
+
+        let intersection: Vec<_> = relative_files_from
+            .intersection(&relative_files_to)
+            .collect();
+
+        debug!("Files to unlink: {:?}", intersection);
+
+        if intersection.len() == 0 {
+            warn!("There are no files to unlink!");
+            return Ok(());
+        }
+
+        for file in intersection.into_iter().map(|file| from.join(&file)) {
+            info!("Unlinking \"{}\"", file.as_os_str().to_str().unwrap());
+            unlink_file(&file)?;
+        }
     } else {
+        debug!("Unlinking root folder.");
+
         if let Ok(_) = fs::read_link(from) {
             // Is symoblic
-
             unlink_file(from)?;
+        } else {
+            bail!(
+                "Expected \"{}\" to be symobolically linked to \"{}\" but it is not.",
+                from.as_os_str().to_str().unwrap(),
+                to.as_os_str().to_str().unwrap()
+            );
         }
     }
 

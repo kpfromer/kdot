@@ -21,6 +21,9 @@ use path::*;
 struct Cli {
     #[structopt(subcommand)]
     pattern: Command,
+
+    #[structopt(short = "v", long = "verbose")]
+    verbosity: Option<String>,
 }
 
 #[derive(StructOpt, Debug)]
@@ -50,13 +53,28 @@ fn load_module_by_name(config: PackageConfig, name: &str) -> Option<ModuleConfig
 }
 
 fn main() -> Result<()> {
+    let args = Cli::from_args();
+
+    let log_level = {
+        if let Some(value) = args.verbosity {
+            match value.as_str() {
+                "verbose" => LevelFilter::Info,
+                "debug" => LevelFilter::Debug,
+                "trace" => LevelFilter::Trace,
+                _ => {
+                    bail!("Invalid \"verbose\" option.");
+                }
+            }
+        } else {
+            LevelFilter::Warn
+        }
+    };
+
     CombinedLogger::init(vec![
-        TermLogger::new(LevelFilter::Debug, Config::default(), TerminalMode::Mixed),
+        TermLogger::new(log_level, Config::default(), TerminalMode::Mixed),
         // WriteLogger::new(LevelFilter::Info, Config::default(), File::create("my_rust_binary.log").unwrap()),
     ])
     .unwrap();
-
-    let args = Cli::from_args();
 
     match args.pattern {
         Command::Link { name } => {
@@ -94,7 +112,7 @@ fn main() -> Result<()> {
                 symlink::unlink_folder(
                     &PathBuf::from(module.location.to),
                     &PathBuf::from(module.location.from),
-                    false,
+                    true,
                 )?;
             } else {
                 bail!("Invalid module.");
