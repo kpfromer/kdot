@@ -1,3 +1,5 @@
+#![allow(clippy::useless_format)]
+
 #[macro_use]
 extern crate log;
 extern crate simplelog;
@@ -46,10 +48,10 @@ enum Command {
 }
 
 fn load_module_by_name(config: PackageConfig, name: &str) -> Option<ModuleConfig> {
-    return config
+    config
         .modules
         .into_iter()
-        .find(|module| module.name == name);
+        .find(|module| module.name == name)
 }
 
 fn main() -> Result<()> {

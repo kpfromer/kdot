@@ -143,7 +143,7 @@ pub fn unlink_folder(from: &PathBuf, to: &PathBuf, recursive: bool) -> Result<()
 
         debug!("Unlinking: {:?}", relative_files_to);
 
-        if relative_files_to.len() == 0 {
+        if relative_files_to.is_empty() {
             warn!("There are no files to unlink!");
             return Ok(());
         }
@@ -158,7 +158,7 @@ pub fn unlink_folder(from: &PathBuf, to: &PathBuf, recursive: bool) -> Result<()
                     f
                 };
 
-                return from_file.exists();
+                from_file.exists()
             })
             // Make path absolute
             .map(|file| from.join(&file))
@@ -169,7 +169,7 @@ pub fn unlink_folder(from: &PathBuf, to: &PathBuf, recursive: bool) -> Result<()
     } else {
         debug!("Unlinking root folder.");
 
-        if let Ok(_) = fs::read_link(from) {
+        if fs::read_link(from).is_ok() {
             // Is symoblic
             unlink_file(from)?;
         } else {
