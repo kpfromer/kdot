@@ -130,6 +130,31 @@ fn unlinks_module() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn unlinks_deeply_nested_module() -> Result<(), Box<dyn std::error::Error>> {
+    let (tmp_dir, (from_path, _from_path_string), (to_path, _to_path_string)) = setup_config()?;
+
+    // Creates a link: `to/deeply/nested/linked.zsh` -> `from/deeply/nested/linked.zsh`
+    fs::create_dir_all(from_path.join("deeply/nested/"))?;
+    fs::create_dir_all(to_path.join("deeply/nested/"))?;
+
+    let location = from_path.join("deeply/nested/linked.zsh");
+    let linked_location = to_path.join("deeply/nested/linked.zsh");
+    File::create(&location)?;
+    std::os::unix::fs::symlink(&location, &linked_location)?;
+
+    let mut cmd = Command::cargo_bin("kdot")?;
+    cmd.current_dir(tmp_dir.path().as_os_str().to_str().unwrap())
+        .arg("unlink")
+        .arg("bash");
+
+    cmd.assert().success();
+
+    let does_not_exist = predicate::path::exists().not();
+    let exists_and_dir = predicate::path::exists().and(predicate::path::is_dir());
+
+    assert_eq!(true, does_not_exist.eval(&linked_location));
+    assert_eq!(true, exists_and_dir.eval(&from_path.join("deeply/nested/")));
+    assert_eq!(true, exists_and_dir.eval(&to_path.join("deeply/nested/")));
+
     Ok(())
 }
 
