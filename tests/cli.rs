@@ -129,6 +129,7 @@ fn unlinks_module() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
 fn unlinks_deeply_nested_module() -> Result<(), Box<dyn std::error::Error>> {
     let (tmp_dir, (from_path, _from_path_string), (to_path, _to_path_string)) = setup_config()?;
 
