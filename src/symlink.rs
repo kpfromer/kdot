@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use pathdiff::diff_paths;
 use std::{
     collections::HashSet,
-    fs::{self, DirEntry},
+    fs::{self},
     os::unix::fs as unixfs,
 };
 use std::{fs::canonicalize, path::PathBuf};

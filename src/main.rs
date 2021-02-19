@@ -118,7 +118,7 @@ fn main() -> Result<()> {
                 bail!("Invalid module.");
             }
         }
-        Command::Sync { name } => {
+        Command::Sync { name: _ } => {
 
             // Check if the module exists, if so unlink it
 
