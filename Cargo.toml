@@ -6,7 +6,8 @@ edition = "2018"
 description = "An Archdot file manager."
 repository = "https://github.com/kpfromer/kdot/"
 license = "MIT"
-categories = ["command-line-utilities", "CLI", "dot-files", "arch"]
+keywords = ["CLI", "dot-files", "arch"]
+categories = ["command-line-utilities"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
