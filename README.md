@@ -41,6 +41,8 @@ Here we have defined the `bash` module and `polybar` module.
 
 `kdot unlink [module]` - unlinks the module to the `from` location.
 
+`kdot sync [module]` - unlinks and relinks the module.
+
 Also read the help dialog via `kdot --help`. It will always be up to date.
 
 ## License

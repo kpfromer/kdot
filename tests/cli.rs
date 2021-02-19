@@ -160,11 +160,30 @@ fn unlinks_deeply_nested_module() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn unlink_fails_if_file_does_not_exist() -> Result<(), Box<dyn std::error::Error>> {
-    Ok(())
-}
-
-#[test]
 fn syncs_module() -> Result<(), Box<dyn std::error::Error>> {
+    let (tmp_dir, (from_path, _from_path_string), (to_path, _to_path_string)) = setup_config()?;
+
+    // Creates a link: `to/linked.zsh` -> `from/linked.zsh`
+    let location = from_path.join("linked.zsh");
+    let linked_location = to_path.join("linked.zsh");
+    File::create(&location)?;
+    std::os::unix::fs::symlink(&location, &linked_location)?;
+
+    // Create the unlinked file (that should be synced)
+    let unlinked_location = from_path.join("unlinked.txt");
+    File::create(&unlinked_location)?;
+
+    let mut cmd = Command::cargo_bin("kdot")?;
+    cmd.current_dir(tmp_dir.path().as_os_str().to_str().unwrap())
+        .arg("sync")
+        .arg("bash");
+
+    cmd.assert().success();
+
+    let exists_and_symlink = predicate::path::exists().and(predicate::path::is_symlink());
+
+    assert_eq!(true, exists_and_symlink.eval(&linked_location));
+    assert_eq!(true, exists_and_symlink.eval(&to_path.join("unlinked.txt")));
+
     Ok(())
 }
