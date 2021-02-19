@@ -10,11 +10,38 @@ This also my first Rust project so I am learning here! :)
 
 #### Configuration File
 
-TODO
+At the root of our dotfiles you need to create a file called `kdot.json` with the following structure:
+
+```json
+{
+  "modules": [
+    {
+      "name": "bash",
+      "location": {
+        "from": "bash",
+        "to": "/home/user"
+      }
+    },
+    {
+      "name": "polybar",
+      "location": {
+        "from": "polybar",
+        "to": "/home/user/.config/polybar"
+      }
+    }
+  ]
+}
+```
+
+Here we have defined the `bash` module and `polybar` module.
 
 #### Commands
 
-TODO
+`kdot link [module]` - links the module to the `to` location.
+
+`kdot unlink [module]` - unlinks the module to the `from` location.
+
+Also read the help dialog via `kdot --help`. It will always be up to date.
 
 ## License
 
