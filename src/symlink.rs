@@ -60,8 +60,6 @@ pub fn link_folder(from: &PathBuf, to: &PathBuf, recursive: bool) -> Result<()> 
 
                 match diff_paths(&full_file_path, &full_to_path) {
                     Some(path_diff) => {
-                        println!("test");
-
                         let mut relative_from = from.clone();
                         relative_from.push(path_diff);
 
