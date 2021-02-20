@@ -7,8 +7,9 @@ extern crate simplelog;
 use anyhow::{bail, Context, Result};
 use config::{ModuleConfig, PackageConfig};
 use simplelog::*;
+use std::{collections::HashMap, iter::FromIterator};
 use std::{
-    fs,
+    collections::HashSet,
     path::{Path, PathBuf},
 };
 use structopt::StructOpt;
@@ -31,27 +32,11 @@ struct Cli {
 #[derive(StructOpt, Debug)]
 enum Command {
     /// Links the module to the system.
-    Link {
-        #[structopt(parse(from_os_str))]
-        name: PathBuf,
-    },
+    Link { modules: Vec<String> },
     /// Unlinks the module to the system.
-    Unlink {
-        #[structopt(parse(from_os_str))]
-        name: PathBuf,
-    },
+    Unlink { modules: Vec<String> },
     /// Unlinks and then relinks the module to the system.
-    Sync {
-        #[structopt(parse(from_os_str))]
-        name: PathBuf,
-    },
-}
-
-fn load_module_by_name(config: PackageConfig, name: &str) -> Option<ModuleConfig> {
-    config
-        .modules
-        .into_iter()
-        .find(|module| module.name == name)
+    Sync { modules: Vec<String> },
 }
 
 fn link_module(module: &ModuleConfig) -> Result<()> {
@@ -83,6 +68,36 @@ fn unlink_module(module: &ModuleConfig) -> Result<()> {
     Ok(())
 }
 
+// TODO: is the best way of handling this?
+// should it be HashSet<String>?
+fn get_matching_modules<'a>(
+    kdot_config: &'a PackageConfig,
+    modules_names: &'a [String],
+) -> HashSet<&'a String> {
+    let config_module_names: HashSet<&'a String> = kdot_config
+        .modules
+        .iter()
+        .map(|module| &module.name)
+        .collect();
+
+    let modules_names: HashSet<&'a String> = HashSet::from_iter(modules_names);
+
+    modules_names
+        .intersection(&config_module_names)
+        .cloned()
+        .collect()
+}
+
+fn get_module_map<'a>(kdot_config: &'a PackageConfig) -> HashMap<String, &'a ModuleConfig> {
+    let mut map: HashMap<String, &'a ModuleConfig> = HashMap::new();
+
+    kdot_config.modules.iter().for_each(|module| {
+        map.insert(module.name.clone(), module);
+    });
+
+    map
+}
+
 fn main() -> Result<()> {
     let args = Cli::from_args();
 
@@ -107,45 +122,47 @@ fn main() -> Result<()> {
     ])
     .unwrap();
 
+    let kdot_config = config::load_package_config(&PathBuf::from("kdot.json"))?;
+    let map = get_module_map(&kdot_config);
+
     match args.pattern {
-        Command::Link { name } => {
-            let kdot_config =
-                config::load_package_config(&fs::canonicalize(&PathBuf::from("./kdot.json"))?)?;
-
-            let name = name.as_os_str().to_str().unwrap();
-
-            for module in kdot_config
-                .modules
-                .into_iter()
-                .filter(|module| module.name == name)
-            {
-                link_module(&module)?;
+        Command::Link {
+            modules: modules_names,
+        } => {
+            for name in get_matching_modules(&kdot_config, &modules_names) {
+                if let Some(module) = map.get(name) {
+                    link_module(&module)?;
+                } else {
+                    bail!("Invalid module.");
+                }
             }
         }
-        Command::Unlink { name } => {
-            let kdot_config = config::load_package_config(&PathBuf::from("kdot.json"))?;
-
-            if let Some(module) = load_module_by_name(kdot_config, &name.to_str().unwrap()) {
-                unlink_module(&module)?;
-            } else {
-                bail!("Invalid module.");
+        Command::Unlink {
+            modules: modules_names,
+        } => {
+            for name in get_matching_modules(&kdot_config, &modules_names) {
+                if let Some(module) = map.get(name) {
+                    unlink_module(&module)?;
+                } else {
+                    bail!("Invalid module.");
+                }
             }
         }
-        Command::Sync { name } => {
-            let kdot_config = config::load_package_config(&PathBuf::from("kdot.json"))?;
+        Command::Sync {
+            modules: modules_names,
+        } => {
+            for name in get_matching_modules(&kdot_config, &modules_names) {
+                if let Some(module) = map.get(name) {
+                    // Try to unlink
+                    unlink_module(*module)?;
 
-            for module in kdot_config
-                .modules
-                .into_iter()
-                .filter(|module| module.name == name.as_os_str().to_str().unwrap())
-            {
-                // Try to unlink
-                unlink_module(&module)?;
+                    // Relink
+                    link_module(*module)?;
 
-                // Relink
-                link_module(&module)?;
-
-                info!("Linked \"{}\" module.", module.name);
+                    info!("Linked \"{}\" module.", module.name);
+                } else {
+                    bail!("Invalid module.");
+                }
             }
         }
     }

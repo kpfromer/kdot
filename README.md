@@ -6,9 +6,9 @@ A dot file manager (similiar to [stow](https://linux.die.net/man/8/stow)) for Ar
 
 This also my first Rust project so I am learning here! :)
 
-### Usage
+## Usage
 
-#### Configuration File
+### Configuration File
 
 At the root of our dotfiles you need to create a file called `kdot.json` with the following structure:
 
@@ -35,13 +35,13 @@ At the root of our dotfiles you need to create a file called `kdot.json` with th
 
 Here we have defined the `bash` module and `polybar` module.
 
-#### Commands
+### Commands
 
-`kdot link [module]` - links the module to the `to` location.
+- `kdot link [modules]` - links the module to the `to` location.
+- `kdot unlink [modules]` - unlinks the module to the `from` location.
+- `kdot sync [modules]` - unlinks and relinks the module.
 
-`kdot unlink [module]` - unlinks the module to the `from` location.
-
-`kdot sync [module]` - unlinks and relinks the module.
+`modules` can be one or more modules (seperated by spaces).
 
 Also read the help dialog via `kdot --help`. It will always be up to date.
 

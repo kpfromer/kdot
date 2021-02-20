@@ -46,6 +46,67 @@ fn setup_config(
     ))
 }
 
+fn setup_config_multiple() -> Result<
+    (
+        TempDir,
+        (PathBuf, String),
+        (PathBuf, String),
+        (PathBuf, String),
+    ),
+    Box<dyn std::error::Error>,
+> {
+    let tmp_dir = TempDir::new()?;
+
+    // Create first from folder
+    let bash_path = tmp_dir.path().join("from/bash");
+    let bash_path_string = bash_path.clone().as_os_str().to_str().unwrap().to_owned();
+    fs::create_dir_all(&bash_path)?;
+
+    // Create second from folder
+    let zsh_path = tmp_dir.path().join("from/zsh");
+    let zsh_path_string = zsh_path.clone().as_os_str().to_str().unwrap().to_owned();
+    fs::create_dir_all(&zsh_path)?;
+
+    // Create to folder
+    let to_path = tmp_dir.path().join("to");
+    let to_path_string = to_path.clone().as_os_str().to_str().unwrap().to_owned();
+    fs::create_dir(&to_path)?;
+
+    let file_path = tmp_dir.path().join("kdot.json");
+    let mut tmp_file = File::create(&file_path)?;
+
+    writeln!(
+        tmp_file,
+        "{}",
+        json!({
+          "modules": [
+            {
+              "name": "bash",
+              "location": {
+                "from": bash_path_string,
+                "to": to_path_string
+              }
+            },
+            {
+                "name": "zsh",
+                "location": {
+                  "from": zsh_path_string,
+                  "to": to_path_string
+                }
+              }
+          ]
+        })
+        .to_string()
+    )?;
+
+    Ok((
+        tmp_dir,
+        (bash_path, bash_path_string),
+        (zsh_path, zsh_path_string),
+        (to_path, to_path_string),
+    ))
+}
+
 #[test]
 fn links_module() -> Result<(), Box<dyn std::error::Error>> {
     let (tmp_dir, (from_path, _from_path_string), (to_path, _to_path_string)) = setup_config()?;
@@ -64,6 +125,40 @@ fn links_module() -> Result<(), Box<dyn std::error::Error>> {
 
     let final_file = to_path.join("bashrc");
     assert_eq!(true, predicate_fn.eval(final_file.as_path()));
+
+    Ok(())
+}
+
+#[test]
+fn links_multiple_modules() -> Result<(), Box<dyn std::error::Error>> {
+    let (
+        tmp_dir,
+        (first_path, _first_path_string),
+        (second_path, _second_path_string),
+        (to_path, _to_path_string),
+    ) = setup_config_multiple()?;
+
+    let mut file = File::create(first_path.join("bashrc"))?;
+    file.write_all(b"this is the bashrc!")?;
+
+    let mut file = File::create(second_path.join("zshrc"))?;
+    file.write_all(b"this is the zshrc!")?;
+
+    let mut cmd = Command::cargo_bin("kdot")?;
+    cmd.current_dir(tmp_dir.path().as_os_str().to_str().unwrap())
+        .arg("link")
+        .arg("bash")
+        .arg("zsh");
+
+    cmd.assert().success();
+
+    let exists_and_symlink = predicate::path::exists().and(predicate::path::is_symlink());
+
+    let first_file = to_path.join("bashrc");
+    let second_file = to_path.join("zshrc");
+
+    assert_eq!(true, exists_and_symlink.eval(first_file.as_path()));
+    assert_eq!(true, exists_and_symlink.eval(second_file.as_path()));
 
     Ok(())
 }
@@ -130,6 +225,43 @@ fn unlinks_module() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn unlinks_multiple_modules() -> Result<(), Box<dyn std::error::Error>> {
+    let (
+        tmp_dir,
+        (first_path, _first_path_string),
+        (second_path, _second_path_string),
+        (to_path, _to_path_string),
+    ) = setup_config_multiple()?;
+
+    // Creates a link: `to/bash/bashrc` -> `from/bashrc`
+    let bashrc = first_path.join("bashrc");
+    let bashrc_location = to_path.join("bashrc");
+    File::create(&bashrc)?;
+    std::os::unix::fs::symlink(&bashrc, &bashrc_location)?;
+
+    // Creates a link: `to/zsh/zshrc` -> `from/zshrc`
+    let zshrc = second_path.join("zshrc");
+    let zshrc_location = to_path.join("zshrc");
+    File::create(&zshrc)?;
+    std::os::unix::fs::symlink(&zshrc, &zshrc_location)?;
+
+    let mut cmd = Command::cargo_bin("kdot")?;
+    cmd.current_dir(tmp_dir.path().as_os_str().to_str().unwrap())
+        .arg("unlink")
+        .arg("bash")
+        .arg("zsh");
+
+    cmd.assert().success();
+
+    let does_not_exist = predicate::path::exists().not();
+
+    assert_eq!(true, does_not_exist.eval(&bashrc_location));
+    assert_eq!(true, does_not_exist.eval(&zshrc_location));
+
+    Ok(())
+}
+
+#[test]
 fn unlinks_deeply_nested_module() -> Result<(), Box<dyn std::error::Error>> {
     let (tmp_dir, (from_path, _from_path_string), (to_path, _to_path_string)) = setup_config()?;
 
@@ -185,5 +317,11 @@ fn syncs_module() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(true, exists_and_symlink.eval(&linked_location));
     assert_eq!(true, exists_and_symlink.eval(&to_path.join("unlinked.txt")));
 
+    Ok(())
+}
+
+#[test]
+fn syncs_multiple_modules() -> Result<(), Box<dyn std::error::Error>> {
+    //  TODO
     Ok(())
 }
