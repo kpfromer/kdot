@@ -135,7 +135,7 @@ pub fn link_folder(from: &PathBuf, to: &PathBuf, recursive: bool) -> Result<()> 
 }
 
 /// Gets all files relative from `folder`
-fn get_relative_files(folder: &PathBuf) -> Result<HashSet<PathBuf>> {
+fn get_relative_files(folder: &PathBuf) -> HashSet<PathBuf> {
     let mut relative_files = HashSet::new();
 
     let walker = WalkDir::new(&folder).into_iter();
@@ -152,7 +152,7 @@ fn get_relative_files(folder: &PathBuf) -> Result<HashSet<PathBuf>> {
         }
     }
 
-    Ok(relative_files)
+    relative_files
 }
 
 /// Remove a folder symlink.
