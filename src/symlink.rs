@@ -33,6 +33,45 @@ pub fn unlink_file(path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
+/// Returns the absolute path of wanted from file, the to file symbolic file, and (if to file is a symlink) the real to path (resolved module file symlink).
+/// ## Assumes
+/// - `to_folder` is absolute
+/// - `to_file` is absolute (ideally includes `to_folder` as parent otherwise will error)
+/// - `from` is relative to the kdot file
+fn get_paths(
+    to_folder: &PathBuf,
+    to_file: &PathBuf,
+    from: &PathBuf,
+) -> Result<(PathBuf, PathBuf, PathBuf)> {
+    // Link to real file (since canonicalize follows symlink)
+    let to_real_abs = canonicalize(&to_file)?;
+    // Link to file that is a symbolic link
+    let to_sym_abs = crate::path::absolute_path(&to_file)?;
+
+    let diff = {
+        if let Some(diff) = diff_paths(&to_sym_abs, &to_folder) {
+            diff
+        } else {
+            bail!("Invalid path difference.");
+        }
+    };
+
+    let mut relative_from = from.clone();
+    relative_from.push(&diff);
+
+    // Create the folder of the file (if it does not already exist)
+    let relative_from_parent = relative_from.parent().unwrap();
+    if !relative_from_parent.exists() {
+        fs::create_dir_all(relative_from_parent)?;
+        info!(
+            "Created \"{}\"",
+            relative_from_parent.as_os_str().to_str().unwrap()
+        );
+    }
+
+    Ok((relative_from, to_sym_abs, to_real_abs))
+}
+
 /// Creates a folder symlink.
 pub fn link_folder(from: &PathBuf, to: &PathBuf, recursive: bool) -> Result<()> {
     if recursive {
@@ -40,7 +79,6 @@ pub fn link_folder(from: &PathBuf, to: &PathBuf, recursive: bool) -> Result<()> 
         let walker = WalkDir::new(&to).into_iter();
 
         let full_to_path = canonicalize(&to)?;
-        // let full_from_path = canonicalize(&from)?;
 
         debug!("Recursivly linking.");
 
@@ -56,42 +94,29 @@ pub fn link_folder(from: &PathBuf, to: &PathBuf, recursive: bool) -> Result<()> 
 
                 fs::create_dir_all(file)?;
             } else if file.is_file() {
-                let full_file_path = canonicalize(&file)?;
+                // Handles files in module that link to other files in module (module/a.txt -> module/b.txt)
+                let (from, to_display, to) = get_paths(&full_to_path, &file.to_path_buf(), &from)?;
 
-                match diff_paths(&full_file_path, &full_to_path) {
-                    Some(path_diff) => {
-                        let mut relative_from = from.clone();
-                        relative_from.push(path_diff);
+                info!(
+                    "Linking \"{}\" -> \"{}\"",
+                    from.as_os_str().to_str().unwrap(),
+                    to_display.as_os_str().to_str().unwrap()
+                );
 
-                        // Create the folder of the file (if it does not already exist)
-                        let relative_from_parent = relative_from.parent().unwrap();
-                        if !relative_from_parent.exists() {
-                            fs::create_dir_all(relative_from_parent)?;
-                            info!(
-                                "Created \"{}\"",
-                                relative_from_parent.as_os_str().to_str().unwrap()
-                            );
+                // link_file(&relative_from, file)?;
+                // TODO: remove below infavor of generic impl
+                unixfs::symlink(&to, &from).with_context(|| {
+                    format!(
+                        "Failed to symlink \"{}\" -> \"{}\"{}",
+                        from.as_os_str().to_str().unwrap(),
+                        to.as_os_str().to_str().unwrap(),
+                        if to_display != to {
+                            " (symbolic module link)"
+                        } else {
+                            ""
                         }
-
-                        // TODO: generic impl? (function generic over pathbuf and path?)
-                        info!(
-                            "Linking {} to {}",
-                            relative_from.as_os_str().to_str().unwrap(),
-                            full_file_path.as_os_str().to_str().unwrap()
-                        );
-                        // link_file(&relative_from, file)?;
-                        // TODO: remove below infavor of generic impl
-                        unixfs::symlink(&full_file_path, &relative_from).with_context(|| {
-                            format!(
-                                "Failed to symlink \"{}\" -> \"{}\"",
-                                relative_from.as_os_str().to_str().unwrap(),
-                                file.as_os_str().to_str().unwrap()
-                            )
-                        })?;
-                        // .with_context(|| format!("Failed to link file."))?;
-                    }
-                    None => bail!("Invalid path difference."),
-                }
+                    )
+                })?;
             }
         }
     } else {
@@ -110,7 +135,7 @@ pub fn link_folder(from: &PathBuf, to: &PathBuf, recursive: bool) -> Result<()> 
 }
 
 /// Gets all files relative from `folder`
-fn get_relative_files(folder: &PathBuf) -> Result<HashSet<PathBuf>> {
+fn get_relative_files(folder: &PathBuf) -> HashSet<PathBuf> {
     let mut relative_files = HashSet::new();
 
     let walker = WalkDir::new(&folder).into_iter();
@@ -127,7 +152,7 @@ fn get_relative_files(folder: &PathBuf) -> Result<HashSet<PathBuf>> {
         }
     }
 
-    Ok(relative_files)
+    relative_files
 }
 
 /// Remove a folder symlink.
@@ -137,7 +162,7 @@ pub fn unlink_folder(from: &PathBuf, to: &PathBuf, recursive: bool) -> Result<()
     } else if recursive {
         debug!("Unlinking recursivly.");
 
-        let relative_files_to = get_relative_files(&to)?;
+        let relative_files_to = get_relative_files(&to);
 
         debug!("Unlinking: {:?}", relative_files_to);
 
