@@ -111,7 +111,8 @@ fn setup_config_multiple() -> Result<
 fn links_module() -> Result<(), Box<dyn std::error::Error>> {
     let (tmp_dir, (from_path, _from_path_string), (to_path, _to_path_string)) = setup_config()?;
 
-    let mut file = File::create(from_path.join("bashrc"))?;
+    let bashrc_location = from_path.join("bashrc");
+    let mut file = File::create(&bashrc_location)?;
     file.write_all(b"this is the bashrc!")?;
 
     let mut cmd = Command::cargo_bin("kdot")?;
@@ -121,10 +122,11 @@ fn links_module() -> Result<(), Box<dyn std::error::Error>> {
 
     cmd.assert().success();
 
-    let predicate_fn = predicate::path::exists().and(predicate::path::is_symlink());
+    let exists_and_symlink = predicate::path::exists().and(predicate::path::is_symlink());
 
     let final_file = to_path.join("bashrc");
-    assert_eq!(true, predicate_fn.eval(final_file.as_path()));
+    assert_eq!(true, exists_and_symlink.eval(&final_file));
+    assert_eq!(fs::canonicalize(&final_file)?, bashrc_location);
 
     Ok(())
 }
@@ -157,6 +159,7 @@ fn links_multiple_modules() -> Result<(), Box<dyn std::error::Error>> {
     let first_file = to_path.join("bashrc");
     let second_file = to_path.join("zshrc");
 
+    // TODO: CHECK IT IS LINKED CORRECTLY!!!!
     assert_eq!(true, exists_and_symlink.eval(first_file.as_path()));
     assert_eq!(true, exists_and_symlink.eval(second_file.as_path()));
 
@@ -195,6 +198,41 @@ fn links_deeply_nested_file() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(
         true,
         exists_and_directory_and_not_symlinked.eval(to_path.join("deeply/nested").as_path())
+    );
+
+    Ok(())
+}
+
+#[test]
+fn links_module_linked_file() -> Result<(), Box<dyn std::error::Error>> {
+    let (tmp_dir, (from_path, _from_path_string), (to_path, _to_path_string)) = setup_config()?;
+
+    let bashrc_location = from_path.join("bashrc");
+    File::create(&bashrc_location)?.write_all(b"this is the bashrc!")?;
+
+    // Create a module link - aka link `zshrc` to `bashrc`
+    let zshrc_location = from_path.join("zshrc");
+    std::os::unix::fs::symlink(&bashrc_location, &zshrc_location)?;
+
+    let mut cmd = Command::cargo_bin("kdot")?;
+    cmd.current_dir(tmp_dir.path().as_os_str().to_str().unwrap())
+        .arg("link")
+        .arg("bash");
+
+    cmd.assert().success();
+
+    let exists_and_symlink = predicate::path::exists().and(predicate::path::is_symlink());
+
+    // TODO: CHECK IT IS LINKED CORRECTLY!!!!
+    let bashrc_final = to_path.join("bashrc");
+    let zshrc_final = to_path.join("zshrc");
+    assert_eq!(true, exists_and_symlink.eval(bashrc_final.as_path()));
+    assert_eq!(true, exists_and_symlink.eval(zshrc_final.as_path()));
+    assert_eq!(fs::canonicalize(&bashrc_final)?, bashrc_location);
+    // They should point to same file
+    assert_eq!(
+        fs::canonicalize(&bashrc_final)?,
+        fs::canonicalize(&zshrc_final)?
     );
 
     Ok(())
@@ -314,6 +352,7 @@ fn syncs_module() -> Result<(), Box<dyn std::error::Error>> {
 
     let exists_and_symlink = predicate::path::exists().and(predicate::path::is_symlink());
 
+    // TODO: CHECK IT IS LINKED CORRECTLY!!!!
     assert_eq!(true, exists_and_symlink.eval(&linked_location));
     assert_eq!(true, exists_and_symlink.eval(&to_path.join("unlinked.txt")));
 
