@@ -162,7 +162,7 @@ pub fn unlink_folder(from: &PathBuf, to: &PathBuf, recursive: bool) -> Result<()
     } else if recursive {
         debug!("Unlinking recursivly.");
 
-        let relative_files_to = get_relative_files(&to)?;
+        let relative_files_to = get_relative_files(&to);
 
         debug!("Unlinking: {:?}", relative_files_to);
 
