@@ -95,8 +95,7 @@ pub fn link_folder(from: &PathBuf, to: &PathBuf, recursive: bool) -> Result<()> 
                 fs::create_dir_all(file)?;
             } else if file.is_file() {
                 // Handles files in module that link to other files in module (module/a.txt -> module/b.txt)
-                let (from, to_display, to) =
-                    get_paths(&full_to_path, &file.clone().to_path_buf(), &from)?;
+                let (from, to_display, to) = get_paths(&full_to_path, &file.to_path_buf(), &from)?;
 
                 info!(
                     "Linking \"{}\" -> \"{}\"",
