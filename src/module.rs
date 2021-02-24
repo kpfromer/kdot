@@ -10,6 +10,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+// TODO: check is valid to link (no overrides)
+
 pub fn link_module(module: &ModuleConfig) -> Result<()> {
     let to = absolute_path(&Path::new(&module.location.to))?;
     let from = absolute_path(&Path::new(&module.location.from))?;

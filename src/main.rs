@@ -95,8 +95,6 @@ fn main() -> Result<()> {
 
                     // Relink
                     link_module(*module)?;
-
-                    info!("Linked \"{}\" module.", module.name);
                 } else {
                     bail!("Invalid module.");
                 }
