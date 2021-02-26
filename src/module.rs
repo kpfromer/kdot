@@ -13,8 +13,9 @@ use std::{
 // TODO: check is valid to link (no overrides)
 
 pub fn link_module(module: &ModuleConfig) -> Result<()> {
-    let to = absolute_path(&Path::new(&module.location.to))?;
-    let from = absolute_path(&Path::new(&module.location.from))?;
+    let location = module.get_link_location();
+    let to = absolute_path(&Path::new(&location.to))?;
+    let from = absolute_path(&Path::new(&location.from))?;
 
     info!(
         "Linking \"{}\" to \"{}\"",
@@ -32,9 +33,10 @@ pub fn link_module(module: &ModuleConfig) -> Result<()> {
 
 pub fn unlink_module(module: &ModuleConfig) -> Result<()> {
     info!("Unlinking {} module.", &module.name);
+    let location = module.get_link_location();
     symlink::unlink_folder(
-        &PathBuf::from(&module.location.to),
-        &PathBuf::from(&module.location.from),
+        &PathBuf::from(&location.to),
+        &PathBuf::from(&location.from),
         true,
     )?;
 
